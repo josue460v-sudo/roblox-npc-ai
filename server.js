@@ -4,87 +4,106 @@ const express = require("express");
 const app = express();
 app.use(express.json());
 
+const PORT = process.env.PORT || 3000;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
 app.get("/", (req, res) => {
-  res.json({
-    status: "online",
-    mensagem: "Servidor de IA do NPC Roblox funcionando!"
-  });
+    res.json({
+        online: true,
+        mensagem: "Servidor da IA Jasmin está online! 💗"
+    });
 });
 
 app.post("/chat", async (req, res) => {
-  try {
-    const { mensagem } = req.body;
+    try {
+        const mensagem = req.body.mensagem || req.body.message;
 
-    if (typeof mensagem !== "string" || !mensagem.trim()) {
-      return res.status(400).json({
-        erro: "Envie uma mensagem válida."
-      });
+        if (!mensagem) {
+            return res.status(400).json({
+                erro: "Envie uma mensagem para a Jasmin."
+            });
+        }
+
+        if (!GEMINI_API_KEY) {
+            console.error("GEMINI_API_KEY não foi configurada.");
+            return res.status(500).json({
+                resposta: "Minha inteligência ainda não foi configurada."
+            });
+        }
+
+        const respostaIA = await fetch(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": GEMINI_API_KEY
+                },
+                body: JSON.stringify({
+                    system_instruction: {
+                        parts: [{
+                            text: `Você é Jasmin, uma NPC feminina de Roblox.
+Fale sempre em português brasileiro.
+Seja carinhosa, simpática, divertida e natural.
+Responda como uma personagem de jogo, com mensagens curtas.
+Não diga que é um servidor ou uma API.
+Se o jogador conversar com você, responda diretamente ao que ele disser.
+Use emojis de vez em quando, sem exagerar.`
+                        }]
+                    },
+                    contents: [{
+                        role: "user",
+                        parts: [{ text: String(mensagem) }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.8,
+                        maxOutputTokens: 180
+                    }
+                })
+            }
+        );
+
+        const dados = await respostaIA.json();
+
+        if (!respostaIA.ok) {
+            console.error("Erro da API Gemini:", {
+                status: respostaIA.status,
+                erro: dados.error || dados
+            });
+
+            return res.status(502).json({
+                resposta: "Desculpa, não consegui pensar agora. Tente falar comigo novamente! 💗"
+            });
+        }
+
+        const resposta =
+            dados.candidates?.[0]?.content?.parts
+                ?.map(parte => parte.text || "")
+                .join("")
+                .trim();
+
+        if (!resposta) {
+            console.error("A Gemini não retornou texto:", dados);
+
+            return res.json({
+                resposta: "Oi! 💗 Pode falar comigo de novo?"
+            });
+        }
+
+        return res.json({
+            resposta: resposta,
+            mensagem: resposta
+        });
+
+    } catch (erro) {
+        console.error("Erro no servidor da Jasmin:", erro);
+
+        return res.status(500).json({
+            resposta: "Ops! Tive um probleminha. Tente falar comigo novamente! 💗"
+        });
     }
-
-    const chave = process.env.GEMINI_API_KEY;
-
-    if (!chave) {
-      return res.status(500).json({
-        erro: "A variável GEMINI_API_KEY não está configurada."
-      });
-    }
-
-    const respostaIA = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": chave
-        },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{
-              text: "Você é Jasmin, uma NPC amigável dentro de um jogo Roblox. Responda em português brasileiro, de forma curta, carinhosa e natural. Se pedirem para seguir, parar ou voltar, converse naturalmente, mas não diga que executou o comando se o jogo não o executou."
-            }]
-          },
-          contents: [{
-            parts: [{ text: mensagem.trim() }]
-          }],
-          generationConfig: {
-            maxOutputTokens: 150
-          }
-        })
-      }
-    );
-
-    const dados = await respostaIA.json();
-
-    if (!respostaIA.ok) {
-      console.error("Erro da API Gemini:", {
-        status: respostaIA.status,
-        erro: dados.error
-      });
-
-      return res.status(502).json({
-        erro: "Não foi possível obter uma resposta da IA."
-      });
-    }
-
-    const texto = (dados.candidates?.[0]?.content?.parts || [])
-      .map(parte => parte.text || "")
-      .join("\n")
-      .trim();
-
-    res.json({
-      resposta: texto || "Não consegui responder agora."
-    });
-  } catch (erro) {
-    console.error("Erro interno:", erro.message);
-
-    res.status(500).json({
-      erro: "Erro interno no servidor."
-    });
-  }
 });
 
-const porta = process.env.PORT || 3000;
-
-app.listen(porta, "0.0.0.0", () => {
-  console.log(`Servidor iniciado na porta ${porta}`);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Servidor da Jasmin iniciado na porta ${PORT}`);
 });
